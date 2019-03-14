@@ -14,7 +14,10 @@
 #import "UIImage+MultiFormat.h"
 
 #if SD_UIKIT || SD_WATCH
+//每个像素占用的字节数
 static const size_t kBytesPerPixel = 4;
+
+//色彩空间占用的字节数
 static const size_t kBitsPerComponent = 8;
 
 /*
@@ -33,8 +36,11 @@ static const CGFloat kDestImageSizeMB = 60.0f;
  */
 static const CGFloat kSourceImageTileSizeMB = 20.0f;
 
+//1MB可以存储多少像素
 static const CGFloat kBytesPerMB = 1024.0f * 1024.0f;
-static const CGFloat kPixelsPerMB = kBytesPerMB / kBytesPerPixel;
+static const CGFloat kPixelsPerMB = kBytesPerMB / kBytesPerPixel; //除以kBytesPerPixel就是把字节转换为像素
+
+//如果像素小于这个值，则不解压缩
 static const CGFloat kDestTotalPixels = kDestImageSizeMB * kPixelsPerMB;
 static const CGFloat kTileTotalPixels = kSourceImageTileSizeMB * kPixelsPerMB;
 
@@ -204,6 +210,8 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
 
 #if SD_UIKIT || SD_WATCH
 - (nullable UIImage *)sd_decompressedImageWithImage:(nullable UIImage *)image {
+    
+    //判断图片需不需要解码
     if (![[self class] shouldDecodeImage:image]) {
         return image;
     }
@@ -226,6 +234,7 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
         // kCGImageAlphaNone is not supported in CGBitmapContextCreate.
         // Since the original image here has no alpha info, use kCGImageAlphaNoneSkipLast
         // to create bitmap graphics contexts without alpha info.
+        //创建一个没有透明度通道的contexts
         CGContextRef context = CGBitmapContextCreate(NULL,
                                                      width,
                                                      height,
@@ -237,6 +246,7 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
             return image;
         }
         
+        //绘制图像
         // Draw the image into the context and retrieve the new bitmap image without alpha
         CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
         CGImageRef imageRefWithoutAlpha = CGBitmapContextCreateImage(context);
@@ -249,14 +259,20 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
 }
 
 - (nullable UIImage *)sd_decompressedAndScaledDownImageWithImage:(nullable UIImage *)image {
+    
+     //判断图片需不需要解码
     if (![[self class] shouldDecodeImage:image]) {
         return image;
     }
     
+    //如果图片小于目标值大小，则直接走解码
     if (![[self class] shouldScaleDownImage:image]) {
         return [self sd_decompressedImageWithImage:image];
     }
     
+    
+    
+    /*如果大于目标值，按照一定比例缩小图片,下面的代码全是压缩的代码*/
     CGContextRef destContext;
     
     // autorelease the bitmap context and all vars to help system to free memory when there are memory warning.
@@ -433,12 +449,12 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
 #pragma mark - Helper
 + (BOOL)shouldDecodeImage:(nullable UIImage *)image {
     // Prevent "CGBitmapContextCreateImage: invalid context 0x0" error
-    if (image == nil) {
+    if (image == nil) {  //图片为空
         return NO;
     }
     
     // do not decode animated images
-    if (image.images != nil) {
+    if (image.images != nil) {  //动图
         return NO;
     }
     
@@ -523,7 +539,7 @@ static const CGFloat kDestSeemOverlap = 2.0f;   // the numbers of pixels to over
     sourceResolution.height = CGImageGetHeight(sourceImageRef);
     float sourceTotalPixels = sourceResolution.width * sourceResolution.height;
     float imageScale = kDestTotalPixels / sourceTotalPixels;
-    if (imageScale < 1) {
+    if (imageScale < 1) { //如果像素大于目标值，则解压
         shouldScaleDown = YES;
     } else {
         shouldScaleDown = NO;
